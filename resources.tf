@@ -195,7 +195,7 @@ resource "kubernetes_secret_v1" "postgres" {
 
 resource "kubernetes_job_v1" "corevia_migrate_job" {
   metadata {
-    name = "corevia-migrate-lb"
+    name = "corevia-migrate-${formatdate("YYYYMMDDHHMM", timestamp())}"
     labels = {
       app = "corevia-server"
     }
@@ -238,7 +238,7 @@ resource "kubernetes_job_v1" "corevia_migrate_job" {
 
 resource "kubernetes_job_v1" "corevia_seed_job" {
   metadata {
-    name = "corevia-seed-lb"
+    name = "corevia-seed-${formatdate("YYYYMMDDHHMM", timestamp())}"
     labels = {
       app = "corevia-server"
     }
@@ -258,7 +258,7 @@ resource "kubernetes_job_v1" "corevia_seed_job" {
         restart_policy = "Never"
 
         container {
-          name  = "migrate"
+          name  = "seed"
           image = "registry.digitalocean.com/corevia/corevia:server-latest" # replace with your container
 
           command = ["yarn", "db:seed"]
