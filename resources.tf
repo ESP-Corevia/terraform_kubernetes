@@ -1,7 +1,7 @@
 resource "digitalocean_kubernetes_cluster" "corevia" {
   name   = "corevia"
   region = "fra1"
-  version = "1.34.1-do.1"
+  version = "1.34.1-do.2"
 
   registry_integration = true
 
@@ -12,6 +12,36 @@ resource "digitalocean_kubernetes_cluster" "corevia" {
     min_nodes  = 1
     max_nodes  = 3
   }
+}
+
+resource "kubernetes_secret_v1" "ionos_credentials" {
+  metadata {
+    name      = "ionos-credentials"
+    namespace = "kube-system"
+  }
+
+  data = {
+    api-key = var.IONOS_DNS_SECRET
+  }
+
+  type = "Opaque"
+}
+
+resource "helm_release" "ingress_nginx" {
+  name       = "ingress-nginx"
+  repository = "https://kubernetes.github.io/ingress-nginx"
+  chart      = "ingress-nginx"
+  namespace  = "ingress-nginx"
+  create_namespace = true
+}
+
+resource "helm_release" "externaldns" {
+  name       = "external-dns"
+  repository = "https://kubernetes-sigs.github.io/external-dns/"
+  chart      = "external-dns"
+  namespace  = "kube-system"
+
+  values = [file("external-dns-ionos-values.yaml")]
 }
 
 resource "kubernetes_deployment_v1" "corevia_web" {
@@ -46,16 +76,6 @@ resource "kubernetes_deployment_v1" "corevia_web" {
           port {
             container_port = 80
           }
-
-          env {
-            name  = "NODE_ENV"
-            value = var.NODE_ENV
-          }
-
-          env {
-            name  = "VITE_API_URL"
-            value = "http://${kubernetes_service_v1.corevia_server_lb.status[0].load_balancer[0].ingress[0].ip}"
-          }
         }
       }
     }
@@ -72,7 +92,7 @@ resource "kubernetes_service_v1" "corevia_web_lb" {
       app = "corevia-web" # from kubernetes_deployment_v1.corevia_web.metadata[0].labels.app
     }
 
-    type = "LoadBalancer"
+    type = "ClusterIP"
 
     port {
       port        = 80
@@ -122,7 +142,7 @@ resource "kubernetes_deployment_v1" "corevia_server" {
 
           env {
             name  = "CORS_ORIGIN"
-            value = "http://${kubernetes_service_v1.corevia_web_lb.status[0].load_balancer[0].ingress[0].ip}"
+            value = "http://corevia.world"
           }
 
           env {
@@ -132,7 +152,7 @@ resource "kubernetes_deployment_v1" "corevia_server" {
 
           env {
             name  = "BETTER_AUTH_URL"
-            value = "http://${kubernetes_service_v1.corevia_server_lb.status[0].load_balancer[0].ingress[0].ip}"
+            value = "http://corevia.world"
           }
 
           env {
@@ -165,7 +185,7 @@ resource "kubernetes_service_v1" "corevia_server_lb" {
       app = "corevia-server" # from kubernetes_deployment_v1.corevia_server.metadata[0].labels.app
     }
 
-    type = "LoadBalancer"
+    type = "ClusterIP"
 
     port {
       port        = 3000
@@ -173,6 +193,53 @@ resource "kubernetes_service_v1" "corevia_server_lb" {
     }
   }
 }
+
+resource "kubernetes_ingress_v1" "corevia" {
+  metadata {
+    name = "corevia-ingress"
+    annotations = {
+      "kubernetes.io/ingress.class" = "nginx"
+      "external-dns.alpha.kubernetes.io/hostname" = "test.corevia.world"
+    }
+  }
+
+  spec {
+    rule {
+      host = "test.corevia.world"
+
+      http {
+        path {
+          path      = "/api"
+          path_type = "Prefix"
+
+          backend {
+            service {
+              name = kubernetes_service_v1.corevia_server_lb.metadata[0].name
+              port {
+                number = 3000
+              }
+            }
+          }
+        }
+
+        path {
+          path      = "/"
+          path_type = "Prefix"
+
+          backend {
+            service {
+              name = kubernetes_service_v1.corevia_web_lb.metadata[0].name
+              port {
+                number = 80
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}
+
 
 resource "digitalocean_database_cluster" "postgres" {
   name       = "corevia-db"
@@ -272,6 +339,16 @@ resource "kubernetes_job_v1" "corevia_seed_job" {
           env {
             name  = "NODE_TLS_REJECT_UNAUTHORIZED"
             value = "0"
+          }
+
+          env {
+            name  = "BETTER_AUTH_SECRET"
+            value = var.BETTER_AUTH_SECRET
+          }
+
+          env {
+            name  = "SESSION_SECRET"
+            value = var.SESSION_SECRET
           }
         }
       }

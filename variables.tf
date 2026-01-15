@@ -18,3 +18,9 @@ variable "NODE_ENV" {
   type    = string
   default = "production"
 }
+
+variable "IONOS_DNS_SECRET" {
+  description = "IONOS DNS TSIG Secret for ExternalDNS"
+  type        = string
+  sensitive   = true
+}
