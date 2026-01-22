@@ -89,7 +89,7 @@ resource "kubernetes_service_v1" "corevia_web_lb" {
 
   spec {
     selector = {
-      app = "corevia-web" # from kubernetes_deployment_v1.corevia_web.metadata[0].labels.app
+      app = kubernetes_deployment_v1.corevia_web.metadata[0].labels.app
     }
 
     type = "ClusterIP"
@@ -182,7 +182,7 @@ resource "kubernetes_service_v1" "corevia_server_lb" {
 
   spec {
     selector = {
-      app = "corevia-server" # from kubernetes_deployment_v1.corevia_server.metadata[0].labels.app
+      app = "corevia-server"
     }
 
     type = "ClusterIP"
@@ -194,22 +194,129 @@ resource "kubernetes_service_v1" "corevia_server_lb" {
   }
 }
 
+resource "kubernetes_deployment_v1" "corevia_drizzle" {
+  metadata {
+    name = "corevia-drizzle"
+    labels = {
+      app = "corevia-drizzle"
+    }
+  }
+  spec {
+    replicas = 1
+
+    selector {
+      match_labels = {
+        app = "corevia-drizzle"
+      }
+    }
+
+    template {
+      metadata {
+        labels = {
+          app = "corevia-drizzle"
+        }
+      }
+
+      spec {
+        container {
+          image = "ghcr.io/drizzle-team/gateway:latest"
+          name  = "corevia-drizzle"
+
+          port {
+            container_port = 3001
+          }
+
+          env_from {
+            secret_ref {
+              name = kubernetes_secret_v1.postgres.metadata[0].name
+            }
+          }
+
+          env {
+            name  = "NODE_TLS_REJECT_UNAUTHORIZED"
+            value = "0"
+          }
+
+          env {
+            name  = "PORT"
+            value = "3001"
+          }
+        }
+      }
+    }
+  }
+}
+
+resource "kubernetes_service_v1" "corevia_drizzle_lb" {
+  metadata {
+    name = "corevia-drizzle-lb"
+  }
+
+  spec {
+    selector = {
+      app = "corevia-drizzle" # from kubernetes_deployment_v1.corevia_drizzle.metadata[0].labels.app
+    }
+    type = "ClusterIP"
+    port {
+      port        = 3001
+      target_port = 3001
+    }
+  }
+}
+
 resource "kubernetes_ingress_v1" "corevia" {
   metadata {
     name = "corevia-ingress"
     annotations = {
       "kubernetes.io/ingress.class" = "nginx"
-      "external-dns.alpha.kubernetes.io/hostname" = "test.corevia.world"
+      "external-dns.alpha.kubernetes.io/hostname" = "back-office.corevia.world,drizzle.corevia.world,api.corevia.world,www.corevia.world"
     }
   }
 
   spec {
     rule {
-      host = "test.corevia.world"
-
+      host = "back-office.corevia.world"
       http {
         path {
-          path      = "/api"
+          path      = "/"
+          path_type = "Prefix"
+
+          backend {
+            service {
+              name = kubernetes_service_v1.corevia_web_lb.metadata[0].name
+              port {
+                number = 80
+              }
+            }
+          }
+        }
+      }
+    }
+
+    rule {
+      host = "drizzle.corevia.world"
+      http {
+        path {
+          path      = "/"
+          path_type = "Prefix"
+
+          backend {
+            service {
+              name = kubernetes_service_v1.corevia_drizzle_lb.metadata[0].name
+              port {
+                number = 3001
+              }
+            }
+          }
+        }
+      }
+    }
+
+    rule {
+      host = "api.corevia.world"
+      http {
+        path {
+          path      = "/"
           path_type = "Prefix"
 
           backend {
@@ -221,7 +328,12 @@ resource "kubernetes_ingress_v1" "corevia" {
             }
           }
         }
+      }
+    }
 
+    rule {
+      host = "www.corevia.world"
+      http {
         path {
           path      = "/"
           path_type = "Prefix"
@@ -239,7 +351,6 @@ resource "kubernetes_ingress_v1" "corevia" {
     }
   }
 }
-
 
 resource "digitalocean_database_cluster" "postgres" {
   name       = "corevia-db"
@@ -283,7 +394,7 @@ resource "kubernetes_job_v1" "corevia_migrate_job" {
 
         container {
           name  = "migrate"
-          image = "registry.digitalocean.com/corevia/corevia:server-latest" # replace with your container
+          image = "registry.digitalocean.com/corevia/corevia:server-latest"
 
           command = ["yarn", "db:migrate"]
 
@@ -326,7 +437,7 @@ resource "kubernetes_job_v1" "corevia_seed_job" {
 
         container {
           name  = "seed"
-          image = "registry.digitalocean.com/corevia/corevia:server-latest" # replace with your container
+          image = "registry.digitalocean.com/corevia/corevia:server-latest"
 
           command = ["yarn", "db:seed"]
 
