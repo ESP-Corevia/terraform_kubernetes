@@ -7,7 +7,7 @@ resource "kubernetes_deployment_v1" "corevia_server" {
   }
 
   spec {
-    replicas = 1
+    replicas = var.server_hpa_enabled ? null : var.server_replicas
 
     selector {
       match_labels = {
@@ -26,6 +26,7 @@ resource "kubernetes_deployment_v1" "corevia_server" {
         container {
           image = "registry.digitalocean.com/corevia/corevia:server-latest"
           name  = "corevia-server"
+          image_pull_policy = "Always"
 
           port {
             container_port = 3000
@@ -39,7 +40,7 @@ resource "kubernetes_deployment_v1" "corevia_server" {
 
           env {
             name  = "CORS_ORIGIN"
-            value = "http://corevia.world"
+            value = "https://${var.BACKOFFICE_URL}"
           }
 
           env {
@@ -49,7 +50,7 @@ resource "kubernetes_deployment_v1" "corevia_server" {
 
           env {
             name  = "BETTER_AUTH_URL"
-            value = "http://corevia.world"
+            value = "https://${var.API_URL}"
           }
 
           env {
@@ -66,6 +67,49 @@ resource "kubernetes_deployment_v1" "corevia_server" {
             name  = "NODE_TLS_REJECT_UNAUTHORIZED"
             value = "0"
           }
+
+          resources {
+            requests = {
+              cpu    = var.server_cpu_request
+              memory = var.server_memory_request
+            }
+            limits = {
+              cpu    = var.server_cpu_limit
+              memory = var.server_memory_limit
+            }
+          }
+        }
+      }
+    }
+  }
+}
+
+resource "kubernetes_horizontal_pod_autoscaler_v2" "corevia_server" {
+  count = var.server_hpa_enabled ? 1 : 0
+
+  metadata {
+    name = "corevia-server"
+  }
+
+  spec {
+    min_replicas = var.server_min_replicas
+    max_replicas = var.server_max_replicas
+
+    scale_target_ref {
+      api_version = "apps/v1"
+      kind        = "Deployment"
+      name        = kubernetes_deployment_v1.corevia_server.metadata[0].name
+    }
+
+    metric {
+      type = "Resource"
+
+      resource {
+        name = "cpu"
+
+        target {
+          type                = "Utilization"
+          average_utilization = var.server_cpu_utilization_target
         }
       }
     }
