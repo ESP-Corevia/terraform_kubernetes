@@ -33,14 +33,14 @@ resource "kubernetes_ingress_v1" "corevia" {
     name = "corevia-ingress"
     annotations = {
       "kubernetes.io/ingress.class"                   = "nginx"
-      "external-dns.alpha.kubernetes.io/hostname"     = "back-office.corevia.world,drizzle.corevia.world,api.corevia.world,www.corevia.world"
+      "external-dns.alpha.kubernetes.io/hostname"     = "back-office.corevia.world,drizzle.corevia.world,api.corevia.world,www.corevia.world,dashboard.corevia.world"
       "external-dns.alpha.kubernetes.io/ttl"          = "60"
     }
   }
 
   spec {
     rule {
-      host = "back-office.corevia.world"
+      host = var.BACKOFFICE_URL
       http {
         path {
           path      = "/"
@@ -59,7 +59,7 @@ resource "kubernetes_ingress_v1" "corevia" {
     }
 
     rule {
-      host = "drizzle.corevia.world"
+      host = var.DRIZZLE_URL
       http {
         path {
           path      = "/"
@@ -78,7 +78,7 @@ resource "kubernetes_ingress_v1" "corevia" {
     }
 
     rule {
-      host = "api.corevia.world"
+      host = var.API_URL
       http {
         path {
           path      = "/"
@@ -97,7 +97,7 @@ resource "kubernetes_ingress_v1" "corevia" {
     }
 
     rule {
-      host = "www.corevia.world"
+      host = var.WWW_URL
       http {
         path {
           path      = "/"
@@ -105,7 +105,26 @@ resource "kubernetes_ingress_v1" "corevia" {
 
           backend {
             service {
-              name = kubernetes_service_v1.corevia_web_lb.metadata[0].name
+              name = kubernetes_service_v1.corevia_home_lb.metadata[0].name
+              port {
+                number = 80
+              }
+            }
+          }
+        }
+      }
+    }
+
+    rule {
+      host = var.DASHBOARD_URL
+      http {
+        path {
+          path      = "/"
+          path_type = "Prefix"
+
+          backend {
+            service {
+              name = kubernetes_service_v1.headlamp_external.metadata[0].name
               port {
                 number = 80
               }
