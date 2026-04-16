@@ -93,3 +93,18 @@ terraform destroy
 - All files must be in the same directory for Terraform to process them
 - You need terraform.tfvars with the digital ocean token like `digitalocean_token="token"`
 - Variables referenced (like `var.IONOS_DNS_SECRET`, `var.BETTER_AUTH_SECRET`, etc.) should be defined in a `variables.tf` file
+
+## Connect to the cluster
+
+Connect to digital ocean, go to Kubernetes and then download the kubeconfig.yaml.
+
+Copy the file and rename it to kubeconfig.yaml.
+
+Then those command based on your terminal:
+
+```
+# Cmd
+set KUBECONFIG=C:\Repo_path\terraform_kubernetes\kubeconfig.yaml
+# Bash
+export KUBECONFIG=/Repo_path/terraform_kubernetes/kubeconfig.yaml
+```
