@@ -19,6 +19,45 @@ resource "helm_release" "ingress_nginx" {
   create_namespace = true
 }
 
+resource "helm_release" "cert_manager" {
+  name             = "cert-manager"
+  repository       = "https://charts.jetstack.io"
+  chart            = "cert-manager"
+  namespace        = "cert-manager"
+  create_namespace = true
+  version          = "v1.16.3"
+
+  set = [
+    {
+      name  = "crds.enabled"
+      value = "true"
+    }
+  ]
+
+  depends_on = [helm_release.ingress_nginx]
+}
+
+resource "kubectl_manifest" "letsencrypt_cluster_issuer" {
+  yaml_body = <<-YAML
+    apiVersion: cert-manager.io/v1
+    kind: ClusterIssuer
+    metadata:
+      name: letsencrypt-prod
+    spec:
+      acme:
+        server: https://acme-v02.api.letsencrypt.org/directory
+        email: romain@ades.io
+        privateKeySecretRef:
+          name: letsencrypt-prod
+        solvers:
+          - http01:
+              ingress:
+                class: nginx
+  YAML
+
+  depends_on = [helm_release.cert_manager]
+}
+
 resource "helm_release" "externaldns" {
   name       = "external-dns"
   repository = "https://kubernetes-sigs.github.io/external-dns/"
@@ -35,10 +74,17 @@ resource "kubernetes_ingress_v1" "corevia" {
       "kubernetes.io/ingress.class"                   = "nginx"
       "external-dns.alpha.kubernetes.io/hostname"     = "back-office.corevia.world,drizzle.corevia.world,api.corevia.world,www.corevia.world,dashboard.corevia.world"
       "external-dns.alpha.kubernetes.io/ttl"          = "60"
+      "cert-manager.io/cluster-issuer"                = "letsencrypt-prod"
+      "nginx.ingress.kubernetes.io/ssl-redirect"      = "true"
     }
   }
 
   spec {
+    tls {
+      hosts       = [var.BACKOFFICE_URL, var.DRIZZLE_URL, var.API_URL, var.WWW_URL, var.DASHBOARD_URL]
+      secret_name = "corevia-tls"
+    }
+
     rule {
       host = var.BACKOFFICE_URL
       http {
