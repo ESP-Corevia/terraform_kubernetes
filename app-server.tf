@@ -59,6 +59,11 @@ resource "kubernetes_deployment_v1" "corevia_server" {
           }
 
           env {
+            name = "NVIDIA_API_KEY"
+            value = var.NVIDIA_API_KEY
+          }
+
+          env {
             name  = "NODE_ENV"
             value = "development"
           }

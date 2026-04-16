@@ -23,7 +23,7 @@ resource "kubernetes_job_v1" "corevia_migrate_job" {
           name  = "migrate"
           image = "registry.digitalocean.com/corevia/corevia:server-latest"
 
-          command = ["yarn", "db:migrate"]
+          command = ["pnpm", "db:migrate"]
 
           env_from {
             secret_ref {
@@ -66,7 +66,7 @@ resource "kubernetes_job_v1" "corevia_seed_job" {
           name  = "seed"
           image = "registry.digitalocean.com/corevia/corevia:server-latest"
 
-          command = ["yarn", "db:seed"]
+          command = ["pnpm", "db:seed"]
 
           env_from {
             secret_ref {
@@ -87,6 +87,22 @@ resource "kubernetes_job_v1" "corevia_seed_job" {
           env {
             name  = "SESSION_SECRET"
             value = var.SESSION_SECRET
+          }
+
+          env {
+            name  = "BETTER_AUTH_URL"
+            value = "https://${var.API_URL}"
+          }
+
+          
+          env {
+            name = "NVIDIA_API_KEY"
+            value = var.NVIDIA_API_KEY
+          }
+
+          env {
+            name  = "NODE_ENV"
+            value = "development"
           }
         }
       }

@@ -9,6 +9,11 @@ variable "BETTER_AUTH_SECRET" {
   default = "supersecret"
 }
 
+variable "NVIDIA_API_KEY" {
+  type    = string
+  default = "supersecret"
+}
+
 variable "SESSION_SECRET" {
   type    = string
   default = "supersecret"

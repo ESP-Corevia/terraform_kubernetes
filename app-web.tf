@@ -29,7 +29,7 @@ resource "kubernetes_deployment_v1" "corevia_web" {
           image_pull_policy = "Always"
 
           port {
-            container_port = 80
+            container_port = 8080
           }
 
           resources {
@@ -94,7 +94,7 @@ resource "kubernetes_service_v1" "corevia_web_lb" {
 
     port {
       port        = 80
-      target_port = 80
+      target_port = 8080
     }
   }
 }
