@@ -189,3 +189,18 @@ variable "home_memory_limit" {
   type    = string
   default = "128Mi"
 }
+
+variable "GRAFANA_ADMIN_PASSWORD" {
+  type      = string
+  sensitive = true
+}
+
+variable "GRAFANA_URL" {
+  type    = string
+  default = "grafana.corevia.world"
+}
+
+variable "PROMETHEUS_URL" {
+  type    = string
+  default = "prometheus.corevia.world"
+}

@@ -67,12 +67,34 @@ resource "helm_release" "externaldns" {
   values = [file("external-dns-ionos-values.yaml")]
 }
 
+resource "kubernetes_service_v1" "grafana_external" {
+  metadata {
+    name = "grafana-external"
+  }
+
+  spec {
+    type          = "ExternalName"
+    external_name = "kube-prometheus-stack-grafana.monitoring.svc.cluster.local"
+  }
+}
+
+resource "kubernetes_service_v1" "prometheus_external" {
+  metadata {
+    name = "prometheus-external"
+  }
+
+  spec {
+    type          = "ExternalName"
+    external_name = "kube-prometheus-stack-prometheus.monitoring.svc.cluster.local"
+  }
+}
+
 resource "kubernetes_ingress_v1" "corevia" {
   metadata {
     name = "corevia-ingress"
     annotations = {
       "kubernetes.io/ingress.class"                   = "nginx"
-      "external-dns.alpha.kubernetes.io/hostname"     = "back-office.corevia.world,drizzle.corevia.world,api.corevia.world,www.corevia.world,dashboard.corevia.world"
+      "external-dns.alpha.kubernetes.io/hostname"     = "back-office.corevia.world,drizzle.corevia.world,api.corevia.world,www.corevia.world,dashboard.corevia.world,${var.GRAFANA_URL},${var.PROMETHEUS_URL}"
       "external-dns.alpha.kubernetes.io/ttl"          = "60"
       "cert-manager.io/cluster-issuer"                = "letsencrypt-prod"
       "nginx.ingress.kubernetes.io/ssl-redirect"      = "true"
@@ -81,7 +103,7 @@ resource "kubernetes_ingress_v1" "corevia" {
 
   spec {
     tls {
-      hosts       = [var.BACKOFFICE_URL, var.DRIZZLE_URL, var.API_URL, var.WWW_URL, var.DASHBOARD_URL]
+      hosts       = [var.BACKOFFICE_URL, var.DRIZZLE_URL, var.API_URL, var.WWW_URL, var.DASHBOARD_URL, var.GRAFANA_URL, var.PROMETHEUS_URL]
       secret_name = "corevia-tls"
     }
 
@@ -173,6 +195,44 @@ resource "kubernetes_ingress_v1" "corevia" {
               name = kubernetes_service_v1.headlamp_external.metadata[0].name
               port {
                 number = 80
+              }
+            }
+          }
+        }
+      }
+    }
+
+    rule {
+      host = var.GRAFANA_URL
+      http {
+        path {
+          path      = "/"
+          path_type = "Prefix"
+
+          backend {
+            service {
+              name = kubernetes_service_v1.grafana_external.metadata[0].name
+              port {
+                number = 80
+              }
+            }
+          }
+        }
+      }
+    }
+
+    rule {
+      host = var.PROMETHEUS_URL
+      http {
+        path {
+          path      = "/"
+          path_type = "Prefix"
+
+          backend {
+            service {
+              name = kubernetes_service_v1.prometheus_external.metadata[0].name
+              port {
+                number = 9090
               }
             }
           }
