@@ -106,6 +106,12 @@ variable "DASHBOARD_URL" {
   default = "dashboard.corevia.world"
 }
 
+variable "APP_URL" {
+  description = "Public hostname for the app for doctor and patient users"
+  type    = string
+  default = "app.corevia.world"
+}
+
 # ─── Server app scaling & resources ──────────────────────────────────────────
 
 variable "server_replicas" {

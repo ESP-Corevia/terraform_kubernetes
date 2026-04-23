@@ -116,7 +116,7 @@ resource "kubernetes_ingress_v1" "corevia" {
     name = "corevia-ingress"
     annotations = {
       "kubernetes.io/ingress.class"                   = "nginx"
-      "external-dns.alpha.kubernetes.io/hostname"     = "back-office.corevia.world,drizzle.corevia.world,api.corevia.world,www.corevia.world,dashboard.corevia.world,${var.GRAFANA_URL},${var.PROMETHEUS_URL}"
+      "external-dns.alpha.kubernetes.io/hostname"     = "back-office.corevia.world,drizzle.corevia.world,api.corevia.world,www.corevia.world,dashboard.corevia.world,${var.GRAFANA_URL},${var.PROMETHEUS_URL},${var.APP_URL}"
       "external-dns.alpha.kubernetes.io/ttl"          = "60"
       "cert-manager.io/cluster-issuer"                = "letsencrypt-prod"
       "nginx.ingress.kubernetes.io/ssl-redirect"      = "true"
@@ -125,7 +125,7 @@ resource "kubernetes_ingress_v1" "corevia" {
 
   spec {
     tls {
-      hosts       = [var.BACKOFFICE_URL, var.DRIZZLE_URL, var.API_URL, var.WWW_URL, var.DASHBOARD_URL, var.GRAFANA_URL, var.PROMETHEUS_URL]
+      hosts       = [var.BACKOFFICE_URL, var.DRIZZLE_URL, var.API_URL, var.WWW_URL, var.DASHBOARD_URL, var.GRAFANA_URL, var.PROMETHEUS_URL, var.APP_URL]
       secret_name = "corevia-tls"
     }
 
@@ -262,6 +262,26 @@ resource "kubernetes_ingress_v1" "corevia" {
               name = kubernetes_service_v1.prometheus_external.metadata[0].name
               port {
                 number = 9090
+              }
+            }
+          }
+        }
+      }
+    }
+
+    # app.corevia.world → corevia-app (port 80)
+    rule {
+      host = var.APP_URL
+      http {
+        path {
+          path      = "/"
+          path_type = "Prefix"
+
+          backend {
+            service {
+              name = kubernetes_service_v1.corevia_app_lb.metadata[0].name
+              port {
+                number = 80
               }
             }
           }

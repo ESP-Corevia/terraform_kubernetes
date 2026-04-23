@@ -1,0 +1,108 @@
+# Deployment for the Corevia back-office frontend (SvelteKit / port 8080).
+# The replica count is set to null when HPA is enabled so Kubernetes owns
+# the desired replica count instead of Terraform overwriting it on every apply.
+resource "kubernetes_deployment_v1" "corevia_app" {
+  metadata {
+    name = "corevia-app"
+    labels = {
+      app = "corevia-app"
+    }
+  }
+
+  spec {
+    replicas = var.web_hpa_enabled ? null : var.web_replicas
+
+    selector {
+      match_labels = {
+        app = "corevia-app"
+      }
+    }
+
+    template {
+      metadata {
+        labels = {
+          app = "corevia-app"
+        }
+      }
+
+      spec {
+        container {
+          image = "registry.digitalocean.com/corevia/corevia:corevia-app-latest"
+          name  = "corevia-app"
+          image_pull_policy = "Always"
+
+          port {
+            container_port = 8080
+          }
+
+          resources {
+            requests = {
+              cpu    = var.web_cpu_request
+              memory = var.web_memory_request
+            }
+            limits = {
+              cpu    = var.web_cpu_limit
+              memory = var.web_memory_limit
+            }
+          }
+        }
+      }
+    }
+  }
+}
+
+# HorizontalPodAutoscaler for the app deployment. Created only when
+# web_hpa_enabled = true; scales between web_min_replicas and
+# web_max_replicas based on average CPU utilisation.
+resource "kubernetes_horizontal_pod_autoscaler_v2" "corevia_app" {
+  count = var.web_hpa_enabled ? 1 : 0
+
+  metadata {
+    name = "corevia-app"
+  }
+
+  spec {
+    min_replicas = var.web_min_replicas
+    max_replicas = var.web_max_replicas
+
+    scale_target_ref {
+      api_version = "apps/v1"
+      kind        = "Deployment"
+      name        = kubernetes_deployment_v1.corevia_app.metadata[0].name
+    }
+
+    metric {
+      type = "Resource"
+
+      resource {
+        name = "cpu"
+
+        target {
+          type                = "Utilization"
+          average_utilization = var.web_cpu_utilization_target
+        }
+      }
+    }
+  }
+}
+
+# ClusterIP service that exposes the app pods on port 80 (mapped from container
+# port 8080). The Ingress routes back-office.corevia.world to this service.
+resource "kubernetes_service_v1" "corevia_app_lb" {
+  metadata {
+    name = "corevia-app-lb"
+  }
+
+  spec {
+    selector = {
+      app = kubernetes_deployment_v1.corevia_app.metadata[0].labels.app
+    }
+
+    type = "ClusterIP"
+
+    port {
+      port        = 80
+      target_port = 8080
+    }
+  }
+}
