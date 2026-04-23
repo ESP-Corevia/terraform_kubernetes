@@ -1,3 +1,6 @@
+# Deployment for the Corevia public-facing home / marketing page (port 8080).
+# The replica count is set to null when HPA is enabled so Kubernetes owns
+# the desired replica count instead of Terraform overwriting it on every apply.
 resource "kubernetes_deployment_v1" "corevia_home" {
   metadata {
     name = "corevia-home"
@@ -48,6 +51,9 @@ resource "kubernetes_deployment_v1" "corevia_home" {
   }
 }
 
+# HorizontalPodAutoscaler for the home deployment. Created only when
+# home_hpa_enabled = true; scales between home_min_replicas and
+# home_max_replicas based on average CPU utilisation.
 resource "kubernetes_horizontal_pod_autoscaler_v2" "corevia_home" {
   count = var.home_hpa_enabled ? 1 : 0
 
@@ -80,6 +86,8 @@ resource "kubernetes_horizontal_pod_autoscaler_v2" "corevia_home" {
   }
 }
 
+# ClusterIP service that exposes the home pods on port 80 (mapped from
+# container port 8080). The Ingress routes www.corevia.world to this service.
 resource "kubernetes_service_v1" "corevia_home_lb" {
   metadata {
     name = "corevia-home-lb"

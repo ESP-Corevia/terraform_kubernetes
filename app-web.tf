@@ -1,3 +1,6 @@
+# Deployment for the Corevia back-office frontend (SvelteKit / port 8080).
+# The replica count is set to null when HPA is enabled so Kubernetes owns
+# the desired replica count instead of Terraform overwriting it on every apply.
 resource "kubernetes_deployment_v1" "corevia_web" {
   metadata {
     name = "corevia-web"
@@ -48,6 +51,9 @@ resource "kubernetes_deployment_v1" "corevia_web" {
   }
 }
 
+# HorizontalPodAutoscaler for the web deployment. Created only when
+# web_hpa_enabled = true; scales between web_min_replicas and
+# web_max_replicas based on average CPU utilisation.
 resource "kubernetes_horizontal_pod_autoscaler_v2" "corevia_web" {
   count = var.web_hpa_enabled ? 1 : 0
 
@@ -80,6 +86,8 @@ resource "kubernetes_horizontal_pod_autoscaler_v2" "corevia_web" {
   }
 }
 
+# ClusterIP service that exposes the web pods on port 80 (mapped from container
+# port 8080). The Ingress routes back-office.corevia.world to this service.
 resource "kubernetes_service_v1" "corevia_web_lb" {
   metadata {
     name = "corevia-web-lb"

@@ -1,3 +1,8 @@
+# Deployment for the Corevia Node.js backend API (port 3000).
+# The replica count is set to null when HPA is enabled so Kubernetes owns
+# the desired replica count instead of Terraform overwriting it on every apply.
+# Database credentials are injected via envFrom; all other env vars are set
+# inline so they are visible in the Terraform plan.
 resource "kubernetes_deployment_v1" "corevia_server" {
   metadata {
     name = "corevia-server"
@@ -64,6 +69,36 @@ resource "kubernetes_deployment_v1" "corevia_server" {
           }
 
           env {
+            name  = "S3_BUCKET_NAME"
+            value = var.S3_BUCKET_NAME
+          }
+
+          env {
+            name  = "S3_ENDPOINT"
+            value = var.S3_ENDPOINT
+          }
+
+          env {
+            name  = "S3_ACCESS_KEY"
+            value = var.S3_ACCESS_KEY
+          }
+
+          env {
+            name  = "S3_SECRET_KEY"
+            value = var.S3_SECRET_KEY
+          }
+
+          env {
+            name  = "S3_REGION"
+            value = var.S3_REGION
+          }
+
+          env {
+            name  = "S3_FORCE_PATH_STYLE"
+            value = tostring(var.S3_FORCE_PATH_STYLE)
+          }
+
+          env {
             name  = "NODE_ENV"
             value = "development"
           }
@@ -89,6 +124,9 @@ resource "kubernetes_deployment_v1" "corevia_server" {
   }
 }
 
+# HorizontalPodAutoscaler for the server deployment. Created only when
+# server_hpa_enabled = true; scales between server_min_replicas and
+# server_max_replicas based on average CPU utilisation.
 resource "kubernetes_horizontal_pod_autoscaler_v2" "corevia_server" {
   count = var.server_hpa_enabled ? 1 : 0
 
@@ -121,6 +159,8 @@ resource "kubernetes_horizontal_pod_autoscaler_v2" "corevia_server" {
   }
 }
 
+# ClusterIP service that exposes the server pods on port 3000 within the
+# cluster. The Ingress routes api.corevia.world to this service.
 resource "kubernetes_service_v1" "corevia_server_lb" {
   metadata {
     name = "corevia-server-lb"

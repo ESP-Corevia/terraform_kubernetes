@@ -1,45 +1,50 @@
-# resource "kubernetes_job_v1" "corevia_migrate_job" {
-#   metadata {
-#     name = "corevia-migrate-${formatdate("YYYYMMDDHHMM", timestamp())}"
-#     labels = {
-#       app = "corevia-server"
-#     }
-#   }
+# One-off Kubernetes Jobs for database lifecycle operations.
+# These are kept commented out and triggered manually (e.g. via terraform apply
+# -target) when a schema migration or seed run is needed, rather than running
+# automatically on every apply.
 
-#   spec {
-#     backoff_limit = 0
+resource "kubernetes_job_v1" "corevia_migrate_job" {
+  metadata {
+    name = "corevia-migrate-${formatdate("YYYYMMDDHHMM", timestamp())}"
+    labels = {
+      app = "corevia-server"
+    }
+  }
 
-#     template {
-#       metadata {
-#         labels = {
-#           app = "corevia-server"
-#         }
-#       }
+  spec {
+    backoff_limit = 0
 
-#       spec {
-#         restart_policy = "Never"
+    template {
+      metadata {
+        labels = {
+          app = "corevia-server"
+        }
+      }
 
-#         container {
-#           name  = "migrate"
-#           image = "registry.digitalocean.com/corevia/corevia:server-latest"
+      spec {
+        restart_policy = "Never"
 
-#           command = ["pnpm", "db:migrate"]
+        container {
+          name  = "migrate"
+          image = "registry.digitalocean.com/corevia/corevia:server-latest"
 
-#           env_from {
-#             secret_ref {
-#               name = kubernetes_secret_v1.postgres.metadata[0].name
-#             }
-#           }
+          command = ["pnpm", "db:migrate"]
 
-#           env {
-#             name  = "NODE_TLS_REJECT_UNAUTHORIZED"
-#             value = "0"
-#           }
-#         }
-#       }
-#     }
-#   }
-# }
+          env_from {
+            secret_ref {
+              name = kubernetes_secret_v1.postgres.metadata[0].name
+            }
+          }
+
+          env {
+            name  = "NODE_TLS_REJECT_UNAUTHORIZED"
+            value = "0"
+          }
+        }
+      }
+    }
+  }
+}
 
 # resource "kubernetes_job_v1" "corevia_seed_job" {
 #   metadata {
@@ -94,7 +99,7 @@
 #             value = "https://${var.API_URL}"
 #           }
 
-          
+
 #           env {
 #             name = "NVIDIA_API_KEY"
 #             value = var.NVIDIA_API_KEY

@@ -1,3 +1,5 @@
+# Stores the IONOS API key in kube-system so ExternalDNS can read it when
+# reconciling DNS records for all public hostnames.
 resource "kubernetes_secret_v1" "ionos_credentials" {
   metadata {
     name      = "ionos-credentials"
@@ -11,6 +13,8 @@ resource "kubernetes_secret_v1" "ionos_credentials" {
   type = "Opaque"
 }
 
+# Deploys the NGINX Ingress Controller, which acts as the single entry point
+# for all inbound HTTP/HTTPS traffic and routes requests to cluster services.
 resource "helm_release" "ingress_nginx" {
   name             = "ingress-nginx"
   repository       = "https://kubernetes.github.io/ingress-nginx"
@@ -19,6 +23,9 @@ resource "helm_release" "ingress_nginx" {
   create_namespace = true
 }
 
+# Installs cert-manager with CRDs enabled so it can automatically provision
+# and renew TLS certificates via Let's Encrypt.
+# Pinned to v1.16.3 to avoid unexpected CRD drift on re-apply.
 resource "helm_release" "cert_manager" {
   name             = "cert-manager"
   repository       = "https://charts.jetstack.io"
@@ -37,6 +44,9 @@ resource "helm_release" "cert_manager" {
   depends_on = [helm_release.ingress_nginx]
 }
 
+# Creates a cluster-wide cert-manager ClusterIssuer that uses the ACME HTTP-01
+# challenge (via the NGINX ingress class) to obtain Let's Encrypt production
+# certificates for all public hostnames.
 resource "kubectl_manifest" "letsencrypt_cluster_issuer" {
   yaml_body = <<-YAML
     apiVersion: cert-manager.io/v1
@@ -58,6 +68,9 @@ resource "kubectl_manifest" "letsencrypt_cluster_issuer" {
   depends_on = [helm_release.cert_manager]
 }
 
+# Deploys ExternalDNS configured for the IONOS DNS provider so that Ingress
+# hostname annotations are automatically reconciled to DNS A records.
+# Configuration details are in external-dns-ionos-values.yaml.
 resource "helm_release" "externaldns" {
   name       = "external-dns"
   repository = "https://kubernetes-sigs.github.io/external-dns/"
@@ -67,6 +80,9 @@ resource "helm_release" "externaldns" {
   values = [file("external-dns-ionos-values.yaml")]
 }
 
+# ExternalName service that proxies the default namespace into the Grafana
+# ClusterIP inside the monitoring namespace, allowing the main Ingress to
+# route grafana.corevia.world without cross-namespace backend references.
 resource "kubernetes_service_v1" "grafana_external" {
   metadata {
     name = "grafana-external"
@@ -78,6 +94,8 @@ resource "kubernetes_service_v1" "grafana_external" {
   }
 }
 
+# ExternalName service for Prometheus, following the same cross-namespace
+# proxy pattern as grafana_external above.
 resource "kubernetes_service_v1" "prometheus_external" {
   metadata {
     name = "prometheus-external"
@@ -89,6 +107,10 @@ resource "kubernetes_service_v1" "prometheus_external" {
   }
 }
 
+# Single Ingress that routes all public hostnames to their respective services.
+# cert-manager issues a shared TLS certificate (corevia-tls) covering all
+# hosts. ExternalDNS annotations drive automatic DNS record creation with a
+# 60-second TTL.
 resource "kubernetes_ingress_v1" "corevia" {
   metadata {
     name = "corevia-ingress"
@@ -107,6 +129,7 @@ resource "kubernetes_ingress_v1" "corevia" {
       secret_name = "corevia-tls"
     }
 
+    # back-office.corevia.world → corevia-web (port 80)
     rule {
       host = var.BACKOFFICE_URL
       http {
@@ -126,6 +149,7 @@ resource "kubernetes_ingress_v1" "corevia" {
       }
     }
 
+    # drizzle.corevia.world → corevia-drizzle (port 3001)
     rule {
       host = var.DRIZZLE_URL
       http {
@@ -145,6 +169,7 @@ resource "kubernetes_ingress_v1" "corevia" {
       }
     }
 
+    # api.corevia.world → corevia-server (port 3000)
     rule {
       host = var.API_URL
       http {
@@ -164,6 +189,7 @@ resource "kubernetes_ingress_v1" "corevia" {
       }
     }
 
+    # www.corevia.world → corevia-home (port 80)
     rule {
       host = var.WWW_URL
       http {
@@ -183,6 +209,7 @@ resource "kubernetes_ingress_v1" "corevia" {
       }
     }
 
+    # dashboard.corevia.world → Headlamp (port 80)
     rule {
       host = var.DASHBOARD_URL
       http {
@@ -202,6 +229,7 @@ resource "kubernetes_ingress_v1" "corevia" {
       }
     }
 
+    # grafana.corevia.world → Grafana via ExternalName proxy (port 80)
     rule {
       host = var.GRAFANA_URL
       http {
@@ -221,6 +249,7 @@ resource "kubernetes_ingress_v1" "corevia" {
       }
     }
 
+    # prometheus.corevia.world → Prometheus via ExternalName proxy (port 9090)
     rule {
       host = var.PROMETHEUS_URL
       http {

@@ -1,3 +1,7 @@
+# Deployment for the Drizzle ORM gateway (port 3001), which provides a
+# browser-based database studio. Runs a single replica with no HPA — this
+# is a developer tool and does not need to scale with production traffic.
+# Database credentials are injected from the shared postgres secret.
 resource "kubernetes_deployment_v1" "corevia_drizzle" {
   metadata {
     name = "corevia-drizzle"
@@ -52,6 +56,8 @@ resource "kubernetes_deployment_v1" "corevia_drizzle" {
   }
 }
 
+# ClusterIP service that exposes the Drizzle gateway on port 3001.
+# The Ingress routes drizzle.corevia.world to this service.
 resource "kubernetes_service_v1" "corevia_drizzle_lb" {
   metadata {
     name = "corevia-drizzle-lb"
